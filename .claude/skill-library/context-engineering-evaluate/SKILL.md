@@ -1,0 +1,103 @@
+---
+name: context-engineering-evaluate
+description: Guides the agent to execute an evaluation of a ContextSet against a golden NLQ+SQL dataset using the Evalbench framework.
+---
+
+> **Load the `context-engineering-workflow` skill first.** It holds the shared context this phase depends on: workspace layout, state file conventions, phase order, and safety protocol. Do not proceed with this phase without reading it.
+
+# Phase: Evaluation Scoring
+
+## Goal
+Run a structured Evalbench evaluation to score the accuracy of a specific context set against a golden truth dataset, identifying exact query failures.
+
+## Input
+
+Before beginning the workflow, you explicitly require:
+- A `tools.yaml` file securely located in the workspace root directory containing the target database connection details.
+- A golden evaluation dataset (`golden_dataset_path`), formatted as an absolute system path. The file must be in the **simplified user-facing format**.
+
+  **Simplified User-Facing Dataset Format**:
+  A JSON list of objects, where each object must have the following keys:
+  - `id`: Unique string identifier (e.g., `eval_001`).
+  - `database`: Target database name.
+  - `nlq`: Natural language question.
+  - `golden_sql`: The correct reference SQL query.
+
+  Example:
+  ```json
+  [
+    {
+      "id": "eval_001",
+      "database": "my_db",
+      "nlq": "Count users",
+      "golden_sql": "SELECT COUNT(*) FROM users"
+    }
+  ]
+  ```
+- The `context_set_id` (the Data Agent's authored context configuration identifier, retrievable by the user directly from the GCP Database Studio console; e.g., `projects/<project_id>/locations/<region>/contextSets/<context_set_name>`).
+
+## Workflow
+
+Follow these steps exactly in order:
+
+1. **Experiment Selection & Memory:**
+   - Scan the local `autoctx/experiments/` directory and list the available tuning workflows/subfolders to the user.
+   - **If no experiment folders exist** (or the user wants to create a new one without running Bootstrap):
+     - **Ask the user to choose** between 2 paths (do not assume):
+       1. **Bootstrap a basic context**: Guide them to trigger the Bootstrap workflow.
+       2. **Use an existing context**:
+          - > [!IMPORTANT]
+            > Inform the user that if they have an existing context, it must be uploaded to GCP Database Studio to obtain a `context_set_id` for evaluation.
+          - Ask the user for a name for this new experiment folder (similar to how Bootstrap does).
+          - Create the folder under `autoctx/experiments/`.
+          - Ask the user to provide the local file path of their existing context.
+          - Record the local file path as the Base Context for this experiment in `autoctx/state.md` for long-term memory.
+          - Continue with the evaluation flow below.
+   - Wait for the user to explicitly select an experiment folder to evaluate (or use the newly created one).
+   - Once selected, explicitly record their chosen experiment name into the local `autoctx/state.md` file to act as long-term memory so you don't forget it during subsequent evaluations.
+
+2. **Parameter Collection:**
+   - **User Inputs:** Prompt the user ONLY for the `golden_dataset_path` and the `context_set_id` (if they haven't provided them already). Do NOT ask them to explain or verify database configurations.
+   - **Interactive DB Selection:** Read the `autoctx/tools.yaml` file to list available databases to the user:
+     1. Find all `kind: source` blocks with supported evaluation engines (consult the `generate_evalbench_configs` tool description for the exact list of supported types).
+     2. If there is exactly one *supported* source, inform the user and auto-select it.
+     3. If there are multiple *supported* sources, list their `name` and `type` and let the user select which database to evaluate.
+
+3. **Config Generation (Core Execution):**
+   - Use the `generate_evalbench_configs` MCP tool. This is the **only** way to generate Evalbench configs. Never invent configs from scratch.
+   - If the tool fails, analyze the error and retry with corrected inputs. If it is an internal system error, STOP and inform the user.
+   - Provide the selected `output_dir` (must be `autoctx/experiments/<experiment_name>/`), `dataset_path`, `context_set_id`, absolute `toolbox_config_path` (e.g. `autoctx/tools.yaml`), and selected `toolbox_source_name`.
+   - The tool will automatically write all generated configuration files (including `golden_queries.json`) directly to the `eval_configs/` directory inside the chosen `autoctx/experiments/<experiment_name>/` folder.
+   - You do not need to manually write or extract file contents. Verify that the files have materialized if needed.
+
+4. **Evalbench Run Integration:**
+   - **Environment Variables**: Ensure the required GCP environment variables are exported:
+     ```bash
+     export EVAL_GCP_PROJECT_ID="<project_id>"
+     export EVAL_GCP_PROJECT_REGION="global"
+     ```
+   - **Canonical Pinned Execution**: You MUST use the pinned version of Evalbench below. Trigger the execution command from the ROOT of the workspace using the exact pinned command:
+     `uvx google-evalbench@1.17.0 --experiment_config=autoctx/experiments/<experiment_name>/eval_configs/run_config.yaml`
+   - Check the command outputs to ensure the evaluation reports materialize in the respective `autoctx/experiments/<experiment_name>/eval_reports/` directory.
+
+## Output
+
+Upon successful completion, the workspace must contain:
+- The generated Evalbench config files successfully written to the `eval_configs/` folder.
+- Evaluating reports built successfully by the external Evalbench runner process.
+
+## Final Summary & Next Steps
+
+Conclude by providing a succinct summary to the user:
+- Confirm that the context set has been scored and point out exactly where the final metrics CSV/results are located.
+- Share top-level performance summaries.
+- **Handling QueryData API Errors**: If the evaluation results or failure cases indicate a API error under `SQL Generator Error`:
+  1. Distinguish this from a context/prompt quality defect.
+  2. Inform the user that the evaluation encountered an API error, and advise them on how to fix. We must fix these errors before we have usable evaluation results.
+  3. For errors related to API field access, advice the caller to verify API field visibility: "Your request references pre-release or private preview feature. Please ensure your GCP project is allowlisted for access by contacting your Google Cloud account team."
+- If the evaluation is successful, suggest actionable next steps (e.g., transition to a refinement workflow to hill-climb and improve the metrics based on failed evaluations).
+
+## Templates & Reference
+
+When listing sources from `tools.yaml`, ensure you only present `kind: source` records to the user.
+The tool `generate_evalbench_configs` will find the selected block inside the file and validate its connection parameters deterministically using Python code. You do not need to manually parse or map individual properties such as `host`, `port`, or `database` yourself. If the tool indicates a verification failure for a specific database type, refer to the schema examples inside this directory (e.g., `cloud-sql-postgres.md`) to guide the user on fixing their `tools.yaml` definition.

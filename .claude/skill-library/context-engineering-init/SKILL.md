@@ -1,0 +1,117 @@
+---
+name: context-engineering-init
+description: Orchestrates the initialization workflow for context engineering, and provides helper workflow for setting up database connections by creating or updating tools.yaml configurations.
+---
+
+> **Load the `context-engineering-workflow` skill first.** It holds the shared context this phase depends on: workspace layout, state file conventions, phase order, and safety protocol. Do not proceed with this phase without reading it.
+
+# Phase: Setup & Connection Configuration
+
+## Goal
+Scaffold the local `autoctx/` workspace and establish verified database connections to prepare the environment for context engineering.
+
+## Initialization Workflow
+
+Follow these steps when the user asks to initialize the environment:
+
+1.  **Confirm Working Directory:** Explicitly state the current working directory to the user. Explain that the initialization will create an `autoctx/` folder in this directory to hold `tools.yaml`, `state.md`, and `experiments/`. Ask them to confirm if this is the correct location before proceeding.
+2.  **Check Existing Infrastructure:**
+    - Check if the `autoctx/` directory exists.
+    - If it exists, verify if it contains valid `tools.yaml` and `state.md` files. If it appears to be an unrelated folder or corrupted, STOP and ask the user how to proceed (e.g., use a different name or overwrite).
+    - If it is a valid Autoctx folder and contains all items, inform the user it's already initialized. Otherwise, proceed to create missing items inside `autoctx/`.
+3.  **Setup Toolbox Configuration:** If `tools.yaml` is missing inside `autoctx/`, follow the primary "1. Create a New tools.yaml" workflow documented below in the **Toolbox Config Helper** section.
+4.  **Create State Tracker (`autoctx/state.md`):** If `state.md` is missing inside `autoctx/`, create it. `state.md` is the **authoritative single source of truth** for active database scope and configuration across all workflow phases.
+    Initialize `state.md` with:
+    ```markdown
+    # Context Authoring Experiment State Tracking
+
+    ## Active Database
+    - **Source Name**: `<data_source_name>`
+    - **Type**: `<database_type>`
+    - **Graph Ids**: []  # (Populated during schema inspection)
+    ```
+5.  **Initialize Experiments Directory:** If `experiments/` is missing inside `autoctx/`, create an empty `experiments/` directory inside `autoctx/`.
+
+## Output
+
+Upon successful completion, the workspace must contain:
+- `autoctx/`: The dedicated workspace directory.
+    - `tools.yaml`: A structurally sound configuration file for the Toolbox MCP Server.
+    - `state.md`: The external state tracker and single source of truth for database scope and hill-climbing iterations.
+    - `experiments/`: The base directory prepared to store all hill-climbing run artifacts (e.g. baseline contexts, evaluation reports).
+
+## Final Summary
+
+Conclude by providing a succinct summary to the user:
+- State whether the workspace was initialized newly or if existing files were preserved.
+- Instruct the user to reload the MCP toolbox so any new database connections take effect:
+    - **Gemini CLI**: run `/mcp reload`.
+    - **Claude Code**: run `/mcp`, select `toolbox`, and select `Reconnect` — or `/quit` and relaunch Claude Code.
+    - **Antigravity CLI**: run `/mcp`, select `toolbox`, and select `Restart`.
+- Inform them they are now ready to proceed to the next phase (e.g., the Bootstrap workflow).
+
+---
+
+# Toolbox Config Helper
+
+This section contains standalone instructions for managing the `tools.yaml` file for the GenAI Toolbox. You can execute these if the user explicitly asks to add or list database connections.
+
+## Credentials
+
+For Google Cloud databases, the system uses Application Default Credentials (ADC) and IAM Authentication. Providing a user and password is not supported.
+
+When collecting information from the user, inform the user that only Application Default Credentials (ADC) are supported for authentication. They do not need to provide a username or password.
+
+**Sample Message:**
+> "I'll help you configure the database connection in `tools.yaml`. Note that the system only supports Application Default Credentials (ADC) for authentication, so you don't need to provide a username or password. Please ensure that the IAM account you are using has the required permissions to access the database.
+>
+> Could you please provide the following details:
+> - Google Cloud Project ID:
+> - Region: (or Instance ID / Database ID for Spanner)
+> - Dialect: (for Spanner: GoogleSQL [default] or PostgreSQL)
+> - Target tables or property graphs to focus on (optional):
+> ... (other required fields based on database type)"
+
+## Primary Workflows
+
+### 1. Create a New `tools.yaml`
+
+1.  **Identify Database Type:** Ask the user which database they want to configure:
+    - Cloud SQL Postgres
+    - Cloud SQL MySQL
+    - AlloyDB Postgres
+    - Spanner GoogleSQL (Graph supported)
+    - Spanner PostgreSQL (no Graph support)
+    - Cloud Bigtable
+    - Firestore (MongoDB API)
+
+    *Spanner Dialect Disambiguation Rule:* If the user specifies Spanner without indicating whether it is GoogleSQL or PostgreSQL, the agent **MUST explicitly ask**: *"Is your Spanner database configured with GoogleSQL (default) or PostgreSQL dialect?"* Alternatively, if `gcloud` is authenticated, the agent can inspect the database dialect using `gcloud spanner databases describe <database_name> --instance=<instance_id> --project=<project_id> --format="value(databaseDialect)"`. Do not silently assume GoogleSQL.
+2.  **Collect Information:**
+    - Request all **Required Information** based on the templates inside this directory. Do NOT assume missing fields; ask the user for them explicitly. For Spanner, ensure the dialect (`GOOGLESQL` or `POSTGRESQL`) is determined and explicitly configured in `tools.yaml`.
+3.  **Generate Configuration:** Replace all placeholders with the user's provided values and generate the complete `tools.yaml` content. Save it to the target location (e.g., `autoctx/tools.yaml` for Autoctx workflows, or `tools.yaml` in the current directory for standalone use).
+4.  **Validate:** After saving, validate the new connection using the toolbox script, replacing `<config_path>` with the actual path to the file:
+    `uvx toolbox-server@1.10.0 --config <config_path> invoke <data_source_name>-list-schemas`
+
+### 2. Add a Database to an Existing `tools.yaml`
+
+1.  **Identify Database Type:** Ask the user for the type of the new database connection they wish to add.
+2.  **Collect Information:** Request the required information for the new connection, including a new, unique `<data_source_name>`.
+3.  **Read Existing File:** Read the content of the existing `tools.yaml` from the target location.
+4.  **Generate and Append:** Generate the YAML snippets for the new `sources` and `tools` sections. Append these new entries to the respective sections in the existing file content.
+5.  **Save Configuration:** Save the updated content back to the file.
+6.  **Validate:** Validate only the newly added connection, replacing `<config_path>` with the actual path to the file:
+    `uvx toolbox-server@1.10.0 --config <config_path> invoke <data_source_name>-list-schemas`
+
+### 3. List Existing Database Connections
+
+1.  **Check and Read `tools.yaml`:** Check for the `tools.yaml` file. If it doesn't exist, inform the user.
+2.  **Parse and List:** Parse the YAML content and list the names of all configured data sources found under the `sources:` key limit.
+
+## Validation
+
+To verify that a specific database connection is configured correctly at any time, run the validation script with the target data source name:
+`uvx toolbox-server@1.10.0 --config tools.yaml invoke <data_source_name>-list-schemas`
+
+## Templates & Reference
+
+For the specific fields required for each database type and the exact YAML structure to use, refer to the templates in this directory (.../references/init/...).

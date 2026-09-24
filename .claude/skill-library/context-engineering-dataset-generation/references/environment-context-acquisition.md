@@ -1,0 +1,44 @@
+# Environment & Context Acquisition Protocol
+
+> **Parent Skill Reference**: This reference is used as part of the ENVIRONMENT & CONTEXT ACQUISITION phase defined in `context-engineering-dataset-generation/SKILL.md`.
+
+This protocol serves as a guide to build a comprehensive, grounded understanding of the business domain and technical environment. 
+
+**1. Schema & Artifact Integration (Domain Mapping)**
+*   **Objective:** Bridge the gap between technical architecture and business terminology.
+*   **Action:** Check for `tools.yaml` to identify DB configurations. Use `<source>-list-schemas` and `<source>-list-graphs` tools to fetch schemas. If unavailable, ask the user to run the initialization workflow for auto context generation. Process business context artifacts (e.g., documents, Markdown, PDFs, source codes locally or from a remote repo such as github, etc.), offline or MCP-fetched schemas, or application source code. **Assign a friendly short name to each ingested artifact (e.g., "Q1_2024_Sales_Report.pdf" → "Sales Report", "https://github.com/kupp0/google-dach-summit26-database-labs" → "github-google-dach-summit26-database-labs") so they can be concisely referred to as sources in the grounding citations for generated pairs. Save this artifact-to-short-name mapping to an output file named `evalset_environment_inputs.md`.** Map business definitions to technical schema elements and property graphs. 
+*   **Required State:** A clear mapping between business concepts (found in PDFs, Markdown, source codes locally or from a remote repo) and actual database elements. This mapping should naturally filter out irrelevant system tables, migration records, or deprecated columns. The `evalset_environment_inputs.md` file must be successfully created and populated with the artifact short names.
+
+**2. Usage Heatmapping**
+*   **Objective:** Identify the highest-value data structures based on real-world application behavior.
+*   **Action:** Analyze source code, ORMs, or Query Logs to identify high-priority tables, frequently joined relationships, and common filter criteria. Ignore system tables or deprecated columns unless explicitly requested.
+*   **Required State:** An aggregated view of prioritized tables, frequently utilized `JOIN` paths, and common filter criteria, derived by analyzing provided application source code, ORMs, design doc, historical query logs, etc., which are written to the `evalset_environment_inputs.md`.
+
+**3. Log Reverse-Translation (Seed Derivation)**
+*   **Objective:** Extract authentic business intents to serve as the foundation for dataset generation.
+*   **Action:** If query logs are provided, filter out DML/administrative queries. Translate meaningful analytical SELECT statements into business NLQs to serve as "Seed Pairs".
+*   **Required State:** A curated set of "Seed Pairs", which are written to the `evalset_environment_inputs.md`.
+
+**4. Expected Natural Language Translation**
+*   **Objective:** Extract expected natural language terminology and their definition from the provided artifacts.
+*   **Action:** Analyze usage artifacts such as product requirement, glossary, to extract key natural language terms and their definition as the expected terminology.
+*   **Required State:** A curated set of "Expected Natural Language Terminology", which is written to the `evalset_environment_inputs.md`.
+
+**5. Business Rule Shift Resolution**
+*   **Objective:** Resolve the source of truth in the ingested schemas and artfacts when some of them contains outdated business rules or mismatched information.
+*   **Action:** Analyze the schemas and artifacts (source codes, query logs, documents, etc) to detect any inconsistency and mismatched information which represent a business rule shift (e.g., document mentions use of `table_a` while application code use `table_b` for the same entity and similar logic). If yes, inspect the content and reason for the most updated business rules to resolve the conflicts. 
+*   **Required State:** A detected set of shifted business rules and the single source of truth for each business rule shift that should be used for the grounded understanding, which are written to the `evalset_environment_inputs.md`.
+
+**6. Input Dataset Ingestion**
+*   **Objective:** Identify and confirm usage of existing evaluation dataset brought by the user.
+*   **Action:** If we identify existing datasets, confirm usage of these datasets by recording the dataset filename and the number of examples provided in `evalset_environment_inputs.md`.
+
+**7. Artifact Scope Cross-Validation**
+*   **Objective:** Identify any discrepancies between the database scope extracted from application artifacts (tables, schemas, property graphs, engines) and the active `state.md` / `tools.yaml` configuration, and expand fields there such as graph ids.
+*   **Action:** Compare the target tables, property graphs and database engines required by the ingested artifacts against `state.md` and database schemas.
+    - If the ingested artifacts or schema reveal additional targets beyond what the user initially specified (or if the user provided an initial subset):
+      - Identify the complete set relevant from schemas and ingested artifacts.
+      - Propose the expanded list of targets in `evalset_gen_plan.md` under **Key Decisions Needing Human Review**.
+      - Update `autoctx/state.md` under `## Active Database -> - **Graph Ids**: [...]` with the expanded list.
+    - Record scope findings and discrepancies in `evalset_environment_inputs.md`.
+*   **Required State:** Recorded scope findings in `evalset_environment_inputs.md` and updated `autoctx/state.md` ready to be integrated into `evalset_gen_plan.md`.

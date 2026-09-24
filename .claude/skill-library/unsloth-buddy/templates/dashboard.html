@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaslamp | Training Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f1115;
+      color: #e5e7eb;
+    }
+
+    .glass-panel {
+      background: rgba(30, 33, 40, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 1rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.18);
+    }
+
+    .gaslamp-gradient {
+      background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .metric-value {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Task-type badge colours */
+    .badge-sft     { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.4);  color: #10b981; }
+    .badge-dpo     { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4);  color: #3b82f6; }
+    .badge-grpo    { background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.4);  color: #a855f7; }
+    .badge-vision  { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4);  color: #f59e0b; }
+
+    /* Phase badge */
+    .phase-idle      { background:rgba(107,114,128,.15); border-color:rgba(107,114,128,.4); color:#9ca3af; }
+    .phase-training  { background:rgba(16,185,129,.15);  border-color:rgba(16,185,129,.4);  color:#10b981; }
+    .phase-completed { background:rgba(59,130,246,.15);  border-color:rgba(59,130,246,.4);  color:#3b82f6; }
+    .phase-error     { background:rgba(239,68,68,.15);   border-color:rgba(239,68,68,.4);   color:#ef4444; }
+
+    .pulse-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: pulse 1.5s ease-in-out infinite;
+      margin-right: 6px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: .4; transform: scale(.7); }
+    }
+
+    ::-webkit-scrollbar { height: 8px; width: 8px; }
+    ::-webkit-scrollbar-track  { background: rgba(0,0,0,.2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb  { background: rgba(255,255,255,.1); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }
+
+    /* Smooth card fade-in */
+    .card-fadein {
+      animation: fadeIn .4s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .toggle-btn {
+      padding: 2px 10px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,.15);
+      background: rgba(255,255,255,.04);
+      color: #9ca3af;
+      transition: all .2s;
+    }
+    .toggle-btn:hover { background: rgba(255,255,255,.1); color: #e5e7eb; }
+    .toggle-btn.active { background: rgba(16,185,129,.2); border-color: rgba(16,185,129,.5); color: #10b981; }
+  </style>
+</head>
+
+<body class="min-h-screen p-6 md:p-8">
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header class="mb-8">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-6 mb-6">
+      <div class="flex items-center space-x-4">
+        <div class="w-14 h-14 rounded-xl bg-gray-900 border border-gray-700 shadow-lg shadow-emerald-500/20 flex items-center justify-center p-1">
+          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-10 h-10">
+            <circle cx="32" cy="32" r="30" fill="url(#g1)" opacity=".15"/>
+            <path d="M20 44 L32 20 L44 44" stroke="url(#g1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="32" cy="20" r="3" fill="#10b981"/>
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#10b981"/>
+                <stop offset="100%" stop-color="#3b82f6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold gaslamp-gradient">Gaslamp</h1>
+          <p class="text-gray-500 text-sm">Live Training Dashboard</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Task-type badge -->
+        <span id="task-badge" class="px-3 py-1 rounded-full text-xs font-semibold border badge-sft">SFT</span>
+        <!-- Phase badge -->
+        <span id="phase-badge" class="px-3 py-1 rounded-full text-xs font-semibold border phase-idle">
+          <span class="pulse-dot hidden" id="pulse-dot"></span>
+          <span id="phase-text">IDLE</span>
+        </span>
+        <!-- EMA toggle -->
+        <button id="ema-toggle" class="toggle-btn active" onclick="toggleEma()">EMA</button>
+        <!-- Connection indicator -->
+        <span id="conn-badge" class="px-3 py-1 rounded-full text-xs font-semibold border border-gray-700 text-gray-500">⏳ connecting</span>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="glass-panel p-4">
+      <div class="flex justify-between text-xs text-gray-400 mb-2">
+        <span id="progress-label">Step 0 / ?</span>
+        <span id="epoch-label">Epoch — / —</span>
+      </div>
+      <div class="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden mb-2">
+        <div id="progress-bar" class="h-2.5 rounded-full transition-all duration-500"
+             style="width: 0%; background: linear-gradient(90deg,#10b981,#3b82f6);"></div>
+      </div>
+      <!-- Epoch sub-progress -->
+      <div class="flex justify-between text-xs text-gray-600 mb-1">
+        <span>Epoch progress</span>
+        <span id="epoch-pct">0%</span>
+      </div>
+      <div class="w-full bg-gray-800/60 rounded-full h-1.5 overflow-hidden">
+        <div id="epoch-bar" class="h-1.5 rounded-full transition-all duration-500"
+             style="width: 0%; background: linear-gradient(90deg,#a855f7,#3b82f6);"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Stat Cards Row ──────────────────────────────────────────── -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="stat-cards">
+    <!-- ETA -->
+    <div class="glass-panel p-4">
+      <p class="text-xs text-gray-400 mb-1">⏳ ETA</p>
+      <p class="text-xl font-bold metric-value" id="stat-eta">—</p>
+    </div>
+    <!-- Elapsed -->
+    <div class="glass-panel p-4">
+      <p class="text-xs text-gray-400 mb-1">🕐 Elapsed</p>
+      <p class="text-xl font-bold metric-value" id="stat-elapsed">—</p>
+    </div>
+    <!-- Peak VRAM -->
+    <div class="glass-panel p-4">
+      <p class="text-xs text-gray-400 mb-1">🎮 Peak VRAM</p>
+      <p class="text-xl font-bold metric-value" id="stat-vram">—</p>
+    </div>
+    <!-- Tokens/sec (shown when available) -->
+    <div class="glass-panel p-4" id="card-tps">
+      <p class="text-xs text-gray-400 mb-1">⚡ Tokens/sec</p>
+      <p class="text-xl font-bold metric-value" id="stat-tps">—</p>
+    </div>
+  </div>
+
+  <!-- Optional stat cards: grad norm + CPU RAM -->
+  <div class="grid grid-cols-2 gap-4 mb-6 hidden" id="extra-stat-row">
+    <div class="glass-panel p-4">
+      <p class="text-xs text-gray-400 mb-1">📐 Grad Norm</p>
+      <p class="text-xl font-bold metric-value" id="stat-grad-norm">—</p>
+    </div>
+    <div class="glass-panel p-4">
+      <p class="text-xs text-gray-400 mb-1">💾 CPU RAM</p>
+      <p class="text-xl font-bold metric-value" id="stat-cpu-ram">—</p>
+    </div>
+  </div>
+
+  <!-- Memory Breakdown Card (shown when total_vram available) -->
+  <div class="glass-panel p-5 mb-6 hidden" id="mem-breakdown">
+    <h2 class="font-semibold text-sm text-gray-300 mb-3">📦 GPU Memory Breakdown <span class="text-xs text-gray-500 font-normal ml-1">(Unsloth-style)</span></h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs text-gray-500 mb-1">Total GPU</p>
+        <p class="text-lg font-bold metric-value" id="mem-total">—</p>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 mb-1">Model Baseline</p>
+        <p class="text-lg font-bold metric-value" id="mem-baseline">—</p>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 mb-1">LoRA Delta</p>
+        <p class="text-lg font-bold text-emerald-400 metric-value" id="mem-lora">—</p>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 mb-1">Peak / Total</p>
+        <p class="text-lg font-bold metric-value" id="mem-pct">—</p>
+      </div>
+    </div>
+    <!-- VRAM gauge bars -->
+    <div class="mt-4 space-y-2">
+      <div>
+        <div class="flex justify-between text-xs text-gray-500 mb-1">
+          <span>Peak VRAM usage</span><span id="mem-pct-label">0%</span>
+        </div>
+        <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+          <div id="mem-bar-peak" class="h-2 rounded-full transition-all duration-500" style="width:0%; background:linear-gradient(90deg,#10b981,#3b82f6);"></div>
+        </div>
+      </div>
+      <div>
+        <div class="flex justify-between text-xs text-gray-500 mb-1">
+          <span>LoRA training overhead</span><span id="mem-lora-pct-label">0%</span>
+        </div>
+        <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+          <div id="mem-bar-lora" class="h-2 rounded-full transition-all duration-500" style="width:0%; background:linear-gradient(90deg,#a855f7,#3b82f6);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Completed summary panel -->
+  <div id="completed-summary" class="glass-panel p-5 mb-6 hidden border border-emerald-900">
+    <h2 class="font-semibold text-sm text-emerald-400 mb-3">✅ Training Complete — Summary</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6 text-xs" id="completed-grid"></div>
+  </div>
+
+  <!-- ── Main Charts ─────────────────────────────────────────────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+    <!-- Loss + LR dual-axis -->
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">📉 Training Loss</h2>
+        <div class="flex gap-2">
+          <span class="text-xs text-gray-400" id="loss-latest">—</span>
+        </div>
+      </div>
+      <canvas id="chart-loss" height="180"></canvas>
+    </div>
+
+    <!-- Eval Loss -->
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">🧪 Evaluation Loss</h2>
+        <span class="text-xs text-gray-400" id="eval-latest">No eval data yet</span>
+      </div>
+      <canvas id="chart-eval" height="180"></canvas>
+    </div>
+
+    <!-- Learning Rate -->
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">📈 Learning Rate</h2>
+        <span class="text-xs text-gray-400" id="lr-latest">—</span>
+      </div>
+      <canvas id="chart-lr" height="180"></canvas>
+    </div>
+
+    <!-- Grad Norm (always rendered, fades in when data arrives) -->
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">📐 Gradient Norm</h2>
+        <span class="text-xs text-gray-400" id="gn-latest">—</span>
+      </div>
+      <canvas id="chart-gn" height="180"></canvas>
+    </div>
+
+  </div>
+
+  <!-- ── Task-specific Panels ────────────────────────────────────── -->
+
+  <!-- GRPO: Reward + KL -->
+  <div id="grpo-panels" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden">
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">🎯 GRPO Reward</h2>
+        <span class="text-xs text-gray-400" id="reward-latest">—</span>
+      </div>
+      <canvas id="chart-reward" height="180"></canvas>
+    </div>
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">🔀 KL Divergence</h2>
+        <span class="text-xs text-gray-400" id="kl-latest">—</span>
+      </div>
+      <canvas id="chart-kl" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- DPO: Chosen/Rejected + KL -->
+  <div id="dpo-panels" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden">
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">⚖️ Chosen vs Rejected Reward</h2>
+        <span class="text-xs text-gray-400" id="dpo-reward-latest">—</span>
+      </div>
+      <canvas id="chart-dpo-reward" height="180"></canvas>
+    </div>
+    <div class="glass-panel p-5 card-fadein">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sm text-gray-200">🔀 KL Divergence</h2>
+        <span class="text-xs text-gray-400" id="dpo-kl-latest">—</span>
+      </div>
+      <canvas id="chart-dpo-kl" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- Vision SFT placeholder badge -->
+  <div id="vision-panel" class="mb-6 hidden">
+    <div class="glass-panel p-5 flex items-center gap-4">
+      <span class="text-3xl">🖼️</span>
+      <div>
+        <h2 class="font-semibold text-sm text-gray-200">Vision SFT Mode</h2>
+        <p class="text-xs text-gray-500 mt-1">Training a Vision Language Model. Standard loss and eval metrics apply.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Hyperparameters & Hardware ─────────────────────────────── -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="glass-panel p-5">
+      <h2 class="font-semibold text-sm text-gray-300 mb-3">⚙️ Hyperparameters</h2>
+      <div id="hp-grid" class="grid grid-cols-2 gap-y-2 gap-x-4 text-xs"></div>
+    </div>
+    <div class="glass-panel p-5">
+      <h2 class="font-semibold text-sm text-gray-300 mb-3">🖥️ Hardware</h2>
+      <div id="hw-grid" class="grid grid-cols-2 gap-y-2 gap-x-4 text-xs"></div>
+    </div>
+  </div>
+
+  <!-- ── Log Table ──────────────────────────────────────────────── -->
+  <div class="glass-panel p-5 mb-6">
+    <h2 class="font-semibold text-sm text-gray-300 mb-3">📋 Recent Log Entries</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs text-left">
+        <thead>
+          <tr class="text-gray-500 border-b border-gray-800">
+            <th class="pb-2 pr-4">Step</th>
+            <th class="pb-2 pr-4">Loss</th>
+            <th class="pb-2 pr-4">Eval Loss</th>
+            <th class="pb-2 pr-4">LR</th>
+            <th class="pb-2 pr-4">Grad Norm</th>
+            <th class="pb-2 pr-4">Tokens/s</th>
+            <th class="pb-2 pr-4 dpo-col grpo-col hidden">Reward</th>
+            <th class="pb-2 dpo-col grpo-col hidden">KL</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody" class="text-gray-300 divide-y divide-gray-800/50"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="text-center text-xs text-gray-600 pb-4">
+    Gaslamp Training Dashboard · Powered by Unsloth-buddy ·
+    <a href="https://github.com/TYH-labs/unsloth-buddy" class="underline hover:text-gray-400">GitHub</a>
+  </footer>
+
+<!-- ── JavaScript ──────────────────────────────────────────────── -->
+<script>
+// ─── Shared Chart Config ──────────────────────────────────────────
+const CHART_DEFAULTS = {
+  responsive: true,
+  animation: { duration: 300 },
+  plugins: {
+    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
+    tooltip: { mode: 'index', intersect: false },
+  },
+  scales: {
+    x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } },
+  },
+};
+
+const COLORS = {
+  emerald:   { border: 'rgba(16,185,129,1)', bg: 'rgba(16,185,129,.12)' },
+  blue:      { border: 'rgba(59,130,246,1)', bg: 'rgba(59,130,246,.12)' },
+  purple:    { border: 'rgba(168,85,247,1)', bg: 'rgba(168,85,247,.12)' },
+  orange:    { border: 'rgba(249,115,22,1)', bg: 'rgba(249,115,22,.12)' },
+  rose:      { border: 'rgba(244,63,94,1)',  bg: 'rgba(244,63,94,.12)' },
+  amber:     { border: 'rgba(245,158,11,1)', bg: 'rgba(245,158,11,.12)' },
+  cyan:      { border: 'rgba(6,182,212,1)',  bg: 'rgba(6,182,212,.12)' },
+  gray:      { border: 'rgba(107,114,128,.6)', bg: 'rgba(107,114,128,.06)' },
+};
+
+function lineDataset(label, col, data, tension=0.35) {
+  return {
+    label,
+    data,
+    borderColor: COLORS[col].border,
+    backgroundColor: COLORS[col].bg,
+    borderWidth: 2,
+    pointRadius: 2,
+    pointHoverRadius: 4,
+    tension,
+    fill: false,
+  };
+}
+
+function makeChart(id, datasets, yLabel='', rightDatasets=null) {
+  const ctx = document.getElementById(id).getContext('2d');
+  const scales = {
+    x: CHART_DEFAULTS.scales.x,
+    y: { ...CHART_DEFAULTS.scales.y, title: { display: !!yLabel, text: yLabel, color: '#6b7280', font:{size:10} } },
+  };
+  if (rightDatasets) {
+    scales.y2 = {
+      type: 'linear',
+      position: 'right',
+      ticks: { color: '#6b7280', font: { size: 10 } },
+      grid: { drawOnChartArea: false },
+    };
+    rightDatasets.forEach(d => d.yAxisID = 'y2');
+  }
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: rightDatasets ? [...datasets, ...rightDatasets] : datasets },
+    options: { ...CHART_DEFAULTS, scales },
+  });
+}
+
+// ─── Chart instances ──────────────────────────────────────────────
+let showEma = true;
+
+const chartLoss   = makeChart('chart-loss',   [lineDataset('Train Loss','emerald',[]), lineDataset('EMA Loss','blue',[])]);
+const chartEval   = makeChart('chart-eval',   [lineDataset('Eval Loss','purple',[])]);
+const chartLR     = makeChart('chart-lr',     [lineDataset('Learning Rate','amber',[])]);
+const chartGN     = makeChart('chart-gn',     [lineDataset('Grad Norm','cyan',[])]);
+const chartReward = makeChart('chart-reward', [lineDataset('Reward','emerald',[]), lineDataset('Reward+σ','gray',[]), lineDataset('Reward−σ','gray',[])]);
+const chartKL     = makeChart('chart-kl',     [lineDataset('KL Div','purple',[])]);
+const chartDpoRew = makeChart('chart-dpo-reward', [lineDataset('Chosen','emerald',[]), lineDataset('Rejected','rose',[])]);
+const chartDpoKL  = makeChart('chart-dpo-kl',    [lineDataset('KL Div','purple',[])]);
+
+function toggleEma() {
+  showEma = !showEma;
+  document.getElementById('ema-toggle').classList.toggle('active', showEma);
+  const emaDs = chartLoss.data.datasets[1];
+  emaDs.hidden = !showEma;
+  chartLoss.update('none');
+}
+
+// ─── EMA helper ───────────────────────────────────────────────────
+function ema(arr, alpha=0.1) {
+  if (!arr.length) return [];
+  const out = [arr[0]];
+  for (let i=1; i<arr.length; i++) out.push(alpha*arr[i]+(1-alpha)*out[i-1]);
+  return out;
+}
+
+function fmt(v) { return (typeof v === 'number') ? v.toFixed(4) : '—'; }
+function fmtSec(s) {
+  if (!s && s !== 0) return '—';
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60);
+  return h>0 ? `${h}h ${m}m ${sec}s` : m>0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+// ─── Update charts from payload ───────────────────────────────────
+function updateCharts(payload) {
+  const logs = payload.logs || [];
+  const meta = payload.meta || {};
+  const hw   = payload.hardware || {};
+  const hp   = payload.hyperparameters || {};
+  const task = (meta.task_type || 'sft').toLowerCase();
+
+  // ── Phase badge ──
+  const phase = (payload.phase || 'idle').toLowerCase();
+  const phaseBadge = document.getElementById('phase-badge');
+  const phaseTxt   = document.getElementById('phase-text');
+  const pulseDot   = document.getElementById('pulse-dot');
+  phaseBadge.className = `px-3 py-1 rounded-full text-xs font-semibold border phase-${phase}`;
+  phaseTxt.textContent  = phase.toUpperCase();
+  pulseDot.classList.toggle('hidden', phase !== 'training');
+
+  // ── Task-type badge ──
+  const taskBadge = document.getElementById('task-badge');
+  taskBadge.className = `px-3 py-1 rounded-full text-xs font-semibold border badge-${task}`;
+  taskBadge.textContent = task.toUpperCase();
+
+  // ── Task-specific panel visibility ──
+  document.getElementById('grpo-panels').classList.toggle('hidden', task !== 'grpo');
+  document.getElementById('dpo-panels').classList.toggle('hidden',  task !== 'dpo');
+  document.getElementById('vision-panel').classList.toggle('hidden', task !== 'vision');
+  // Show task-specific log table columns
+  document.querySelectorAll('.dpo-col').forEach(el => el.classList.toggle('hidden', task !== 'dpo'));
+  document.querySelectorAll('.grpo-col').forEach(el => el.classList.toggle('hidden', task !== 'grpo'));
+
+  // ── Progress bar ──
+  const maxSteps = meta.max_steps || 0;
+  const lastStep = logs.length ? (logs[logs.length-1].step || 0) : 0;
+  const pct = maxSteps > 0 ? Math.min(100, Math.round(lastStep/maxSteps*100)) : 0;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-label').textContent =
+    `Step ${lastStep} / ${maxSteps || '?'}  (${pct}%)`;
+  const epochs = meta.total_epochs || '?';
+  document.getElementById('epoch-label').textContent = `Epochs: ${epochs}`;
+
+  // Epoch sub-bar
+  const curEpoch  = meta.current_epoch || 0;
+  const totEpochs = meta.total_epochs  || 1;
+  const epochPct  = Math.min(100, Math.round((curEpoch / totEpochs) * 100));
+  document.getElementById('epoch-bar').style.width = epochPct + '%';
+  document.getElementById('epoch-pct').textContent  = epochPct + '%';
+  document.getElementById('epoch-label').textContent = `Epoch ${curEpoch.toFixed(2)} / ${totEpochs}`;
+
+  // ── Stat cards ──
+  document.getElementById('stat-eta').textContent     = fmtSec(payload.eta_seconds);
+  document.getElementById('stat-elapsed').textContent = fmtSec(payload.elapsed_seconds);
+  document.getElementById('stat-vram').textContent    = hw.peak_vram_mb ? `${hw.peak_vram_mb} MB` : '—';
+
+  // Grad norm + CPU RAM row
+  const lastGN  = [...logs].reverse().find(l => 'grad_norm'  in l);
+  const lastTPS = [...logs].reverse().find(l => 'tokens_per_sec' in l || 'it_per_sec' in l);
+  if (lastGN || hw.cpu_ram_mb) {
+    document.getElementById('extra-stat-row').classList.remove('hidden');
+    document.getElementById('stat-grad-norm').textContent = lastGN ? fmt(lastGN.grad_norm) : '—';
+    document.getElementById('stat-cpu-ram').textContent   = hw.cpu_ram_mb ? `${hw.cpu_ram_mb} MB` : '—';
+  }
+  if (lastTPS) {
+    const v = lastTPS.tokens_per_sec || lastTPS.it_per_sec;
+    document.getElementById('stat-tps').textContent = typeof v === 'number' ? v.toFixed(1) : '—';
+  }
+
+  // ── Memory Breakdown Panel ──
+  if (hw.total_vram_mb) {
+    document.getElementById('mem-breakdown').classList.remove('hidden');
+    const fmtMb = mb => `${mb} MB (${(mb/1024).toFixed(2)} GB)`;
+    document.getElementById('mem-total').textContent    = fmtMb(hw.total_vram_mb);
+    document.getElementById('mem-baseline').textContent = fmtMb(hw.baseline_vram_mb || 0);
+    document.getElementById('mem-lora').textContent     = fmtMb(hw.lora_vram_mb || 0);
+    document.getElementById('mem-pct').textContent      = `${hw.vram_pct || 0}%`;
+    // Gauge bars
+    const vPct = Math.min(hw.vram_pct || 0, 100);
+    const lPct = Math.min(hw.lora_vram_pct || 0, 100);
+    document.getElementById('mem-bar-peak').style.width  = vPct + '%';
+    document.getElementById('mem-bar-lora').style.width  = lPct + '%';
+    document.getElementById('mem-pct-label').textContent      = vPct + '%';
+    document.getElementById('mem-lora-pct-label').textContent = lPct + '%';
+  }
+
+  // ── Series extraction ──
+  const trainSteps=[], trainLoss=[], evalSteps=[], evalLoss=[];
+  const lrSteps=[],  lrs=[];
+  const gnSteps=[],  gns=[];
+  const rewSteps=[], rewards=[], rewHi=[], rewLo=[];
+  const klSteps=[],  kls=[];
+  const choSteps=[], choVals=[], rejSteps=[], rejVals=[];
+
+  for (const log of logs) {
+    const s = log.step;
+    if (s === undefined) continue;
+    if ('loss' in log) { trainSteps.push(s); trainLoss.push(log.loss); }
+    if ('eval_loss' in log) { evalSteps.push(s); evalLoss.push(log.eval_loss); }
+    if ('learning_rate' in log) { lrSteps.push(s); lrs.push(log.learning_rate); }
+    if ('grad_norm' in log) { gnSteps.push(s); gns.push(log.grad_norm); }
+    if ('reward' in log) {
+      rewSteps.push(s);
+      rewards.push(log.reward);
+      const std = log.reward_std || 0;
+      rewHi.push(log.reward + std);
+      rewLo.push(log.reward - std);
+    }
+    const kl = log.kl_divergence ?? log.kl;
+    if (kl !== undefined) { klSteps.push(s); kls.push(kl); }
+    if ('rewards_chosen' in log)   { choSteps.push(s); choVals.push(log.rewards_chosen); }
+    if ('rewards_rejected' in log) { rejSteps.push(s); rejVals.push(log.rewards_rejected); }
+  }
+
+  // ── Loss chart ──
+  const smoothed = ema(trainLoss);
+  chartLoss.data.labels = trainSteps;
+  chartLoss.data.datasets[0].data = trainLoss;
+  chartLoss.data.datasets[1].data = smoothed;
+  chartLoss.data.datasets[1].hidden = !showEma;
+  chartLoss.update('none');
+  document.getElementById('loss-latest').textContent =
+    trainLoss.length ? `latest: ${trainLoss[trainLoss.length-1].toFixed(4)}` : '';
+
+  // ── Eval chart ──
+  chartEval.data.labels = evalSteps;
+  chartEval.data.datasets[0].data = evalLoss;
+  chartEval.update('none');
+  document.getElementById('eval-latest').textContent =
+    evalLoss.length ? `latest: ${evalLoss[evalLoss.length-1].toFixed(4)}` : 'No eval data yet';
+
+  // ── LR chart ──
+  chartLR.data.labels = lrSteps;
+  chartLR.data.datasets[0].data = lrs;
+  chartLR.update('none');
+  document.getElementById('lr-latest').textContent =
+    lrs.length ? lrs[lrs.length-1].toExponential(3) : '—';
+
+  // ── Grad norm chart ──
+  chartGN.data.labels = gnSteps;
+  chartGN.data.datasets[0].data = gns;
+  chartGN.update('none');
+  document.getElementById('gn-latest').textContent =
+    gns.length ? gns[gns.length-1].toFixed(4) : '—';
+
+  // ── GRPO Reward ──
+  chartReward.data.labels = rewSteps;
+  chartReward.data.datasets[0].data = rewards;
+  chartReward.data.datasets[1].data = rewHi;
+  chartReward.data.datasets[2].data = rewLo;
+  chartReward.update('none');
+  document.getElementById('reward-latest').textContent =
+    rewards.length ? `latest: ${rewards[rewards.length-1].toFixed(4)}` : '—';
+
+  // ── GRPO KL ──
+  chartKL.data.labels = klSteps;
+  chartKL.data.datasets[0].data = kls;
+  chartKL.update('none');
+  document.getElementById('kl-latest').textContent =
+    kls.length ? kls[kls.length-1].toFixed(4) : '—';
+
+  // ── DPO chosen/rejected ──
+  chartDpoRew.data.labels = choSteps.length >= rejSteps.length ? choSteps : rejSteps;
+  chartDpoRew.data.datasets[0].data = choVals;
+  chartDpoRew.data.datasets[1].data = rejVals;
+  chartDpoRew.update('none');
+  document.getElementById('dpo-reward-latest').textContent =
+    choVals.length ? `chosen: ${choVals[choVals.length-1].toFixed(4)}` : '—';
+
+  // ── DPO KL ──
+  chartDpoKL.data.labels = klSteps;
+  chartDpoKL.data.datasets[0].data = kls;
+  chartDpoKL.update('none');
+  document.getElementById('dpo-kl-latest').textContent =
+    kls.length ? kls[kls.length-1].toFixed(4) : '—';
+
+  // ── Hyperparameters panel ──
+  const hpGrid = document.getElementById('hp-grid');
+  hpGrid.innerHTML = '';
+  const hpEntries = [
+    ['Learning Rate', hp.learning_rate !== undefined ? hp.learning_rate.toExponential(2) : '—'],
+    ['Batch Size', hp.train_batch_size ?? '—'],
+    ['Grad Accumulation', hp.gradient_accumulation ?? '—'],
+    ['Optimizer', hp.optimizer ?? '—'],
+    ['Seed', hp.seed ?? '—'],
+  ];
+  hpEntries.forEach(([k,v]) => {
+    hpGrid.insertAdjacentHTML('beforeend',
+      `<span class="text-gray-500">${k}</span><span class="text-gray-200 font-medium">${v}</span>`);
+  });
+
+  // ── Hardware panel ──
+  const hwGrid = document.getElementById('hw-grid');
+  hwGrid.innerHTML = '';
+  const hwEntries = [
+    ['Device', hw.device ?? '—'],
+    ['Peak VRAM', hw.peak_vram_mb ? `${hw.peak_vram_mb} MB` : '—'],
+  ];
+  if (hw.cpu_ram_mb) hwEntries.push(['CPU RAM', `${hw.cpu_ram_mb} MB`]);
+  hwEntries.forEach(([k,v]) => {
+    hwGrid.insertAdjacentHTML('beforeend',
+      `<span class="text-gray-500">${k}</span><span class="text-gray-200 font-medium">${v}</span>`);
+  });
+
+  // ── Completed summary panel ──
+  const summaryPanel = document.getElementById('completed-summary');
+  const summaryGrid  = document.getElementById('completed-grid');
+  if (phase === 'completed' && (payload.train_runtime_seconds || hw.total_vram_mb)) {
+    summaryPanel.classList.remove('hidden');
+    summaryGrid.innerHTML = '';
+    const rt = payload.train_runtime_seconds || payload.elapsed_seconds || 0;
+    const rows = [
+      ['Training time', rt ? `${fmtSec(rt)} (${(rt/60).toFixed(2)} min)` : '—'],
+      ['Total GPU memory', hw.total_vram_mb ? `${hw.total_vram_mb} MB (${(hw.total_vram_mb/1024).toFixed(2)} GB)` : '—'],
+      ['Peak reserved',    hw.peak_vram_mb  ? `${hw.peak_vram_mb} MB — ${hw.vram_pct || 0}% of max` : '—'],
+      ['Model baseline',   hw.baseline_vram_mb !== undefined ? `${hw.baseline_vram_mb} MB` : '—'],
+      ['LoRA overhead',    hw.lora_vram_mb !== undefined ? `${hw.lora_vram_mb} MB — ${hw.lora_vram_pct || 0}% of max` : '—'],
+    ];
+    rows.forEach(([k, v]) => {
+      summaryGrid.insertAdjacentHTML('beforeend',
+        `<span class="text-gray-500">${k}</span><span class="text-emerald-300 font-semibold">${v}</span>`);
+    });
+  } else {
+    summaryPanel.classList.add('hidden');
+  }
+
+  // ── Log table (last 10 entries) ──
+  const tbody = document.getElementById('log-tbody');
+  tbody.innerHTML = '';
+  const recent = [...logs].reverse().slice(0, 10);
+  for (const log of recent) {
+    const kl = log.kl_divergence ?? log.kl;
+    const rew = log.reward;
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr class="hover:bg-white/2 transition-colors">
+        <td class="py-1.5 pr-4 text-gray-400">${log.step ?? '—'}</td>
+        <td class="py-1.5 pr-4">${'loss' in log ? log.loss.toFixed(4) : '—'}</td>
+        <td class="py-1.5 pr-4">${'eval_loss' in log ? log.eval_loss.toFixed(4) : '—'}</td>
+        <td class="py-1.5 pr-4">${'learning_rate' in log ? log.learning_rate.toExponential(3) : '—'}</td>
+        <td class="py-1.5 pr-4">${'grad_norm' in log ? log.grad_norm.toFixed(4) : '—'}</td>
+        <td class="py-1.5 pr-4">${log.tokens_per_sec !== undefined ? log.tokens_per_sec.toFixed(1) : (log.it_per_sec !== undefined ? `${log.it_per_sec.toFixed(2)} it/s` : '—')}</td>
+        <td class="py-1.5 pr-4 dpo-col grpo-col hidden">${rew !== undefined ? rew.toFixed(4) : '—'}</td>
+        <td class="py-1.5 dpo-col grpo-col hidden">${kl !== undefined ? kl.toFixed(4) : '—'}</td>
+      </tr>`);
+  }
+}
+
+// ─── SSE Connection (with polling fallback) ───────────────────────
+let lastPayload = null;
+let pollTimer   = null;
+
+function startPollFallback(port=8080) {
+  // Poll every 10 s as a fallback only
+  pollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`http://localhost:${port}/api/metrics`);
+      if (r.ok) {
+        const payload = await r.json();
+        lastPayload = payload;
+        updateCharts(payload);
+      }
+    } catch(e) {}
+  }, 10000);
+}
+
+function connect(port=8080) {
+  const connBadge = document.getElementById('conn-badge');
+  const es = new EventSource(`http://localhost:${port}/api/stream`);
+
+  es.addEventListener('progress', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      lastPayload = payload;
+      updateCharts(payload);
+      connBadge.textContent = '🟢 live';
+      connBadge.className   = 'px-3 py-1 rounded-full text-xs font-semibold border border-emerald-700 text-emerald-400';
+    } catch(err) {}
+  });
+
+  es.onerror = () => {
+    connBadge.textContent = '🟡 reconnecting';
+    connBadge.className   = 'px-3 py-1 rounded-full text-xs font-semibold border border-amber-700 text-amber-400';
+  };
+
+  es.onopen = () => {
+    // Also do an immediate HTTP fetch to get the full snapshot (handles reconnection)
+    fetch(`http://localhost:${port}/api/metrics`)
+      .then(r => r.ok ? r.json() : null)
+      .then(p => { if (p) { updateCharts(p); } })
+      .catch(()=>{});
+  };
+}
+
+// Detect port from URL hash, e.g. http://localhost:8080/#port=9090
+const hashParams = new URLSearchParams(location.hash.slice(1));
+const port = parseInt(hashParams.get('port') || '8080', 10);
+
+connect(port);
+startPollFallback(port);
+</script>
+
+</body>
+</html>

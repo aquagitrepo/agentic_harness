@@ -14,8 +14,8 @@ A reusable agentic-OS harness for Claude Code, built on the ECC skill library. I
 | `chat/` | Beginner-friendly chat harness on the Claude API (port 8788) |
 | `tests/` | Retained regression tests, run with the `.venv` Python (see Onboarding) |
 | `projects/` | Code for projects tracked in `data/projects/` |
-| `.claude/skill-library/` | 296-skill ECC library, indexed by the `ecc-router` skill |
-| `ECC_SKILLS_LIBRARY.md` / `ECC_Skills_Catalog.pdf` | Full ECC catalog reference |
+| `.claude/skill-library/` | 296-skill ECC library, indexed by the `ecc-router` skill. After changing it, rebuild the index with `scripts/build_skill_index.py` |
+| `ECC_SKILLS_LIBRARY.md` / `ECC_Skills_Catalog.pdf` | Full ECC catalog reference, kept out of routine searches by `.ignore` |
 
 ## Using it
 

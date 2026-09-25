@@ -1,0 +1,5 @@
+# Search tools built on ripgrep (including Claude Code's Grep) skip these paths;
+# git is unaffected. Keeps the 4.7 MB catalog dump out of routine searches.
+# To search it on purpose, pass its path explicitly.
+ECC_SKILLS_LIBRARY.md
+ECC_Skills_Catalog.pdf

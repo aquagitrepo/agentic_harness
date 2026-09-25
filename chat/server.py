@@ -5,10 +5,12 @@ Run: python chat/server.py  then open http://127.0.0.1:8788
 
 import json
 import traceback
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import harness
+import studio
 from dashboard import body_length, request_problem
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -17,6 +19,9 @@ STATIC_FILES = {
     "/index.html": ("index.html", "text/html"),
     "/app.js": ("app.js", "text/javascript"),
     "/styles.css": ("styles.css", "text/css"),
+    "/studio": ("studio.html", "text/html"),
+    "/studio.js": ("studio.js", "text/javascript"),
+    "/studio.css": ("studio.css", "text/css"),
 }
 PORT = 8788
 
@@ -57,6 +62,26 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(f"data: {json.dumps(event)}\n\n".encode("utf-8"))
         self.wfile.flush()
 
+    def _stream(self, events):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        try:
+            try:
+                for event in events:
+                    self._sse(event)
+            except harness.HarnessError as exc:
+                self._sse({"type": "error", "message": str(exc)})
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                raise
+            except Exception:  # headers are already sent: anything uncaught would end the stream silently
+                traceback.print_exc()
+                self._sse({"type": "error", "message": "Something went wrong on the harness server "
+                                                       "(details are in its terminal). Try again."})
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
     def do_GET(self):
         if self._refused("GET"):
             return
@@ -75,6 +100,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"models": models, "default": harness.default_model(models)})
         elif path == "/api/projects":
             self._json({"projects": harness.list_projects()})
+        elif path == "/api/studio/sessions":
+            self._json({"sessions": studio.list_sessions()})
+        elif path in ("/api/studio/session", "/api/studio/file"):
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            sid = (query.get("id") or [""])[0]
+            try:
+                if path == "/api/studio/session":
+                    self._json(studio.public(studio.load(sid)))
+                else:
+                    self._json(studio.read_for_ui(sid, (query.get("path") or [""])[0]))
+            except harness.HarnessError as exc:
+                self._json({"error": str(exc)}, 404)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -93,24 +130,14 @@ class Handler(BaseHTTPRequestHandler):
             if not message:
                 self._json({"error": "Type a message first, then press Send."}, 400)
                 return
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            try:
-                try:
-                    for event in harness.run_turn(model, history, message):
-                        self._sse(event)
-                except harness.HarnessError as exc:
-                    self._sse({"type": "error", "message": str(exc)})
-                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-                    raise
-                except Exception:  # headers are already sent: anything uncaught would end the stream silently
-                    traceback.print_exc()
-                    self._sse({"type": "error", "message": "Something went wrong on the harness server "
-                                                           "(details are in its terminal). Try again."})
-            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-                pass
+            self._stream(harness.run_turn(model, history, message))
+
+        elif self.path == "/api/studio/new":
+            self._json(studio.public(studio.new_session(model)))
+
+        elif self.path == "/api/studio/message":
+            self._stream(studio.run_turn(str(body.get("id") or ""), body.get("message"), model or None,
+                                         bool(body.get("approve"))))
 
         elif self.path == "/api/save-project":
             try:

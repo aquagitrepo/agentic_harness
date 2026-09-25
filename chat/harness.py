@@ -149,10 +149,11 @@ def _refused() -> HarnessError:
     return Refused("Claude declined to answer this one. Try rephrasing the request.")
 
 
-def log_usage(step: str, model: str, response) -> None:
+def log_usage(step: str, model: str, response):
+    """Append this call's tokens and list-price estimate to data/costs/; return the estimate (None if unpriced)."""
     usage = getattr(response, "usage", None)
     if usage is None:
-        return
+        return None
     model = getattr(response, "model", None) or model
     tokens = {key: getattr(usage, key, 0) or 0 for key in
               ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")}
@@ -172,6 +173,7 @@ def log_usage(step: str, model: str, response) -> None:
                 f.write(json.dumps(record) + "\n")
     except OSError as exc:  # the log is bookkeeping; losing a line mustn't cost the user their answer
         print(f"Couldn't write the cost log: {exc}", file=sys.stderr)
+    return usd
 
 
 def chat_json(model: str, system: str, messages: list, schema: dict, step: str) -> dict:

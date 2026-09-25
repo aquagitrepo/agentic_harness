@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness Studio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<link rel="stylesheet" href="/studio.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="rail" aria-label="Studio">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="M14 2 25 8.5v11L14 26 3 19.5v-11Z" stroke="currentColor" stroke-width="1.5"/><circle cx="14" cy="14" r="3.5" fill="currentColor"/></svg>
+      <div><b>HARNESS</b><span>STUDIO</span></div>
+    </div>
+
+    <div class="group">
+      <label class="label" for="model">ENGINE</label>
+      <select id="model"></select>
+      <p class="hint">Claude API: uses the key in the server's terminal</p>
+    </div>
+
+    <div class="group grow">
+      <div class="label">PROJECTS</div>
+      <ul id="sessions" class="sessions"></ul>
+      <button id="new-session" class="new" type="button">+ New project</button>
+    </div>
+
+    <div class="meter-card">
+      <div class="label">SESSION COST</div>
+      <div id="cost" class="cost">$0.00</div>
+      <div class="hint">Estimated at list price</div>
+    </div>
+    <a class="back" href="/">Classic chat</a>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <ol class="phases" id="phases" aria-label="Project phases">
+        <li data-phase="discover"><span>01</span>DISCOVER</li>
+        <li class="sep" aria-hidden="true"></li>
+        <li data-phase="plan"><span>02</span>PLAN</li>
+        <li class="sep" aria-hidden="true"></li>
+        <li data-phase="build"><span>03</span>BUILD</li>
+        <li class="sep" aria-hidden="true"></li>
+        <li data-phase="run"><span>04</span>RUN</li>
+      </ol>
+      <span class="where" id="where"></span>
+    </header>
+
+    <div class="thread" id="thread">
+      <section class="welcome" id="welcome">
+        <h1>What do you want to build?</h1>
+        <p>Describe it in your own words. I'll ask the few questions that change the design, keep a live brief of what we agree on, then write and run the code while you watch.</p>
+        <div class="chips">
+          <button type="button" class="chip">A tool that sorts my photos into folders by date</button>
+          <button type="button" class="chip">A budget tracker that reads my bank's CSV export</button>
+          <button type="button" class="chip">A quiz game for learning Python keywords</button>
+        </div>
+      </section>
+    </div>
+    <div class="activity" id="activity" role="status" aria-live="polite" hidden><i></i><span></span></div>
+
+    <form class="composer" id="composer">
+      <label>
+        <span class="label" id="composer-label">DESCRIBE YOUR PROJECT</span>
+        <textarea id="input" rows="2" placeholder="Type here. Enter sends, Shift+Enter adds a line."></textarea>
+      </label>
+      <button id="send" class="primary" type="submit">Send</button>
+    </form>
+  </main>
+
+  <aside class="panel" aria-label="Project">
+    <div class="tabs" role="tablist" aria-label="Project views">
+      <button type="button" role="tab" id="tab-brief" aria-selected="true" aria-controls="view-brief">Brief</button>
+      <button type="button" role="tab" id="tab-files" aria-selected="false" aria-controls="view-files">Files</button>
+      <button type="button" role="tab" id="tab-console" aria-selected="false" aria-controls="view-console">Console</button>
+    </div>
+
+    <section class="view" id="view-brief" role="tabpanel" aria-labelledby="tab-brief">
+      <div class="panel-head"><span class="label">PROJECT BRIEF</span><span class="live" id="brief-live" hidden><i></i>LIVE · UPDATED</span></div>
+      <h2 class="brief-name" id="brief-name">Untitled project</h2>
+      <div class="fields" id="brief-fields"></div>
+      <div class="questions" id="brief-questions" hidden></div>
+      <div class="ready">
+        <div class="ready-row"><span class="label">READY TO PLAN</span><span id="ready-pct">0%</span></div>
+        <div class="bar" role="img" id="ready-bar-wrap" aria-label="0 percent ready"><span id="ready-bar"></span></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-files" role="tabpanel" aria-labelledby="tab-files" hidden>
+      <div class="files">
+        <nav class="tree" id="tree" aria-label="Project files"><p class="empty">No files yet. They appear here as they're written.</p></nav>
+        <div class="editor">
+          <div class="editor-head"><span id="editor-name">No file open</span><span class="editor-state" id="editor-state"></span></div>
+          <div class="code-wrap" id="code-wrap"><pre class="gutter" id="gutter" aria-hidden="true"></pre><pre class="code" id="code"></pre></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-console" role="tabpanel" aria-labelledby="tab-console" hidden>
+      <div class="panel-head"><span class="label">CONSOLE</span></div>
+      <pre class="console" id="console"><span class="empty">Program output appears here when the Studio runs your code.</span></pre>
+    </section>
+  </aside>
+</div>
+<div id="toast" class="toast" role="alert" hidden></div>
+<script src="/studio.js"></script>
+</body>
+</html>

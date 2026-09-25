@@ -2,6 +2,7 @@
 data/daily-logs/
 data/inbox/
 data/costs/
+data/studio/
 
 # Local-only Claude Code settings (permissions history, machine-specific)
 .claude/settings.local.json

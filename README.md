@@ -44,6 +44,18 @@ Claude does the thinking and writing through the Anthropic API. Answers default 
 
 Every call's token counts and estimated cost at list price are appended to `data/costs/<date>.jsonl`, which stays on your machine.
 
+## Studio (build a project live)
+
+The chat server also serves the Studio at http://127.0.0.1:8788/studio. It's for starting something new. Describe it in your own words, and it asks one question at a time: the question whose answer would most change what gets built, with clickable answers (number keys work too) and a line on why it's asking. Meanwhile a live project brief fills in on the right, with a confidence bar per field. When it knows enough, it proposes the smallest first version that works. Press **Build it** and it writes the code into `projects/<name>/` while you watch each file appear. It then runs it and fixes what fails. Afterwards you can keep asking for changes.
+
+- **Engine:** the Claude API (`claude-opus-5` by default, `claude-sonnet-5` in the sidebar), with the same API key as the chat. Each message can take several Claude calls, so the sidebar shows the session's cost as it goes. A message stops after 30 calls; say "keep going" to continue.
+- **Running code:** the Studio runs `python <file>` inside the project folder automatically. Each run gets no keyboard input, is stopped after 60 seconds, and can't install packages. Environment variables whose names contain KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL are removed, so your API key isn't visible to it. It still runs with your user's permissions, so read what it builds before you rely on it.
+- **What it saves:**
+  - the code in `projects/<name>/`;
+  - a normal project record in `data/projects/`;
+  - the conversation in `data/studio/`, so you can reopen a project from the sidebar;
+  - spend in `data/costs/`.
+
 Both local servers only accept requests from their own page on this machine. Other websites you visit can't post to them or read them.
 
 You need your own Claude API key from https://console.anthropic.com. Put it in an environment variable in your own terminal. Never paste it into the chat or commit it to a file.
@@ -73,7 +85,7 @@ No scheduled/unattended automation is configured — everything here runs intera
    ```
 4. **What's shared vs. personal**, since this matters more with more than one person:
    - `data/projects/`, `data/decisions/`, `data/templates/`, `.claude/agents/`, `.claude/commands/`, `CLAUDE.md` — git-tracked, shared team context. Treat conflicts on these like any other collaboratively-edited file.
-   - `data/daily-logs/`, `data/inbox/`, `data/costs/` — gitignored, personal and local to your machine. Your `/daily-sync` history doesn't sync to teammates and theirs doesn't sync to you.
+   - `data/daily-logs/`, `data/inbox/`, `data/costs/`, `data/studio/` — gitignored, personal and local to your machine. Your `/daily-sync` history doesn't sync to teammates and theirs doesn't sync to you.
    - The dashboard (`scripts/dashboard.py`) is local-only per person (`127.0.0.1`) — there's no shared/networked instance; everyone reads the same git-tracked files but through their own local server.
 5. **Register your own work** with `/new-project <name>` rather than repurposing someone else's project file. Use `/decision` when you make a real tradeoff call, so teammates get the *why*, not just the diff.
 6. **Extending the harness itself** (new agent, new command, new convention) is a change to `CLAUDE.md`/`.claude/agents/`/`.claude/commands/` — open it as a normal PR like any other shared code, since everyone's session reads these at startup.

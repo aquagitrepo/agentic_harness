@@ -19,15 +19,17 @@ The agentic-OS harness itself — this workspace. Kernel (`CLAUDE.md`), speciali
   - The chat plans on Sonnet 5 and logs spend to `data/costs/`.
   - The agents are Claude Code subagents in `.claude/agents/`.
   - `scripts/session_context.py` gives the few-line status that `/status` and `/daily-sync` use.
+- Harness Studio (`/studio` on the chat server, on the Claude API): works through the project with the user, one question at a time, with a live brief. Then it proposes a plan and, once approved, writes and runs Python in `projects/<slug>/` while the UI streams each file.
 
 ## Open Decisions
 - No scheduled/unattended automation configured (decided early on) — everything runs interactively.
 - Git identity and GitHub auth set up locally (repo-scoped identity, Git Credential Manager as global credential helper) rather than via GitHub CLI (not installed on this machine) or the MCP GitHub connector (not authorized/available this session).
 - Agents as subagents: `data/decisions/2026-09-25-agents-as-claude-code-subagents.md`.
 - Chat planning model: `data/decisions/2026-09-25-chat-planning-on-sonnet-5.md`.
+- Studio engine and auto-run: `data/decisions/2026-09-25-studio-engine-and-auto-run.md`.
 
 ## Next Actions
 - [ ] Register a real (non-meta) project via `/new-project <name>` to start using the harness for actual work.
 - [ ] Add a SessionStart hook running `python scripts/session_context.py` to `.claude/settings.json`, and prune the one-off `Bash(...)` rules in `.claude/settings.local.json`. Claude Code's auto mode blocked Claude from editing its own settings, so this needs a person.
-- [ ] Live-test the chat's Sonnet 5 planning call with a real API key.
+- [ ] Live-test the chat's Sonnet 5 planning call and a full Studio session with a real API key.
 - [ ] Review and merge `harness-upgrade`, then push.

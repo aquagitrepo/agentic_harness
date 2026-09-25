@@ -8,6 +8,7 @@ File-based memory for this workspace. JSON/markdown only — no external DB. See
 | `projects/` | One file per project this workspace tracks context for | Yes |
 | `decisions/` | Lightweight ADRs — architectural/business decisions with rationale | Yes |
 | `inbox/` | Untriaged tasks/ideas awaiting a decision | No (gitignored) |
+| `studio/` | Studio sessions: each project's conversation, brief and build log (`<id>.json`), so it can be reopened | No (gitignored) |
 | `costs/` | Chat API spend: one JSON line per Claude call (`<date>.jsonl`: step, model, token counts, estimated `usd` at list price) | No (gitignored) |
 | `templates/` | Reusable file templates (e.g. `project.md`) | Yes |
 

@@ -1,6 +1,6 @@
 """Engine behind the harness chat: route -> plan -> search agents -> streamed answer.
 
-Uses the same agents/ personas and data/projects/ files as the rest of the
+Uses the same .claude/agents/ personas and data/projects/ files as the rest of the
 harness, Claude via the Anthropic API, and DuckDuckGo search via the ddgs library.
 Credentials come from the environment (ANTHROPIC_API_KEY or an `ant auth login`
 profile) and are resolved by the SDK; this module never handles the key itself.
@@ -229,7 +229,7 @@ def clean_history(history) -> list:
 
 
 def agent_identity(key: str) -> str:
-    path = ROOT / "agents" / f"{key}.md"
+    path = ROOT / ".claude" / "agents" / f"{key}.md"
     if not path.exists():
         return AGENTS[key][1]
     _, _, after = read_text(path).partition("## Identity")

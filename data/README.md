@@ -42,5 +42,5 @@ Frontmatter values are always one line, and existing files are never overwritten
 
 Rules:
 - Logs are append-only — never edit a past day's log.
-- Every agent that produces a durable fact writes it back here before finishing (see each `agents/*.md` Memory Scope).
+- Every agent that produces a durable fact writes it back here before finishing (see each `.claude/agents/*.md` Memory Scope).
 - Read the relevant files here at the start of a task before assuming there's no prior context.

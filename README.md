@@ -7,10 +7,11 @@ A reusable agentic-OS harness for Claude Code, built on the ECC skill library. I
 | Path | Purpose |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Kernel: identity, agent registry, routing rules |
-| `agents/` | Specialist agent personas (`@dev`, `@writer`, `@researcher`, `@ops`) |
+| `.claude/agents/` | Specialist agents (`@dev`, `@writer`, `@researcher`, `@ops`). Each is a Claude Code subagent with its own model and tool limits |
 | `.claude/commands/` | Slash commands — `/daily-sync`, `/decision`, `/new-project`, `/status` |
 | `data/` | File-based persistent memory — see `data/README.md` |
 | `scripts/dashboard.py` | Local dashboard over `data/` (port 8787) |
+| `scripts/session_context.py` | A few-line status of `data/` for `/status`, `/daily-sync`, and a session-start hook |
 | `chat/` | Beginner-friendly chat harness on the Claude API (port 8788) |
 | `tests/` | Retained regression tests, run with the `.venv` Python (see Onboarding) |
 | `projects/` | Code for projects tracked in `data/projects/` |
@@ -37,7 +38,7 @@ Or, inside a Claude Code session, ask to preview the `harness-dashboard` launch 
 
 ## Chat (beginner-friendly harness)
 
-A chat version of the whole harness that shows its work while it runs. Each message goes through the same loop the kernel uses (understand, pick an agent from `agents/`, plan, research, build). You watch search agents fan out across the web, and the answer builds block by block as each planned section streams in. If you're starting something and haven't said enough yet, it asks a few simple questions first instead of guessing. "Save this chat as a project" writes a normal `data/projects/` file.
+A chat version of the whole harness that shows its work while it runs. Each message goes through the same loop the kernel uses (understand, pick an agent from `.claude/agents/`, plan, research, build). You watch search agents fan out across the web, and the answer builds block by block as each planned section streams in. If you're starting something and haven't said enough yet, it asks a few simple questions first instead of guessing. "Save this chat as a project" writes a normal `data/projects/` file.
 
 Claude does the thinking and writing through the Anthropic API. Answers default to `claude-opus-5`, and you can switch to `claude-sonnet-5` in the sidebar for lower cost. The search agents use the open-source [ddgs](https://pypi.org/project/ddgs/) library for DuckDuckGo searches. Each message makes two Claude calls, and each costs real money on your API account. The first is a short planning call, which always runs on the cheaper `claude-sonnet-5`. The second writes the answer on the model you picked. "Save this chat as a project" also runs on `claude-sonnet-5`. On `claude-opus-5`, if Claude's safety filter declines a request, the API retries it on its recommended fallback model (`fallbacks: "default"`). `claude-sonnet-5` has no fallback. If it declines the planning call, the chat retries that call on the model you picked. A request that's still declined shows a message.
 
@@ -71,8 +72,8 @@ No scheduled/unattended automation is configured — everything here runs intera
    git config user.email "you@example.com"
    ```
 4. **What's shared vs. personal**, since this matters more with more than one person:
-   - `data/projects/`, `data/decisions/`, `data/templates/`, `agents/`, `.claude/commands/`, `CLAUDE.md` — git-tracked, shared team context. Treat conflicts on these like any other collaboratively-edited file.
-   - `data/daily-logs/`, `data/inbox/` — gitignored, personal and local to your machine. Your `/daily-sync` history doesn't sync to teammates and theirs doesn't sync to you.
+   - `data/projects/`, `data/decisions/`, `data/templates/`, `.claude/agents/`, `.claude/commands/`, `CLAUDE.md` — git-tracked, shared team context. Treat conflicts on these like any other collaboratively-edited file.
+   - `data/daily-logs/`, `data/inbox/`, `data/costs/` — gitignored, personal and local to your machine. Your `/daily-sync` history doesn't sync to teammates and theirs doesn't sync to you.
    - The dashboard (`scripts/dashboard.py`) is local-only per person (`127.0.0.1`) — there's no shared/networked instance; everyone reads the same git-tracked files but through their own local server.
 5. **Register your own work** with `/new-project <name>` rather than repurposing someone else's project file. Use `/decision` when you make a real tradeoff call, so teammates get the *why*, not just the diff.
-6. **Extending the harness itself** (new agent, new command, new convention) is a change to `CLAUDE.md`/`agents/`/`.claude/commands/` — open it as a normal PR like any other shared code, since everyone's session reads these at startup.
+6. **Extending the harness itself** (new agent, new command, new convention) is a change to `CLAUDE.md`/`.claude/agents/`/`.claude/commands/` — open it as a normal PR like any other shared code, since everyone's session reads these at startup.

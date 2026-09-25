@@ -4,8 +4,11 @@ Uses the same agents/ personas and data/projects/ files as the rest of the
 harness, Claude via the Anthropic API, and DuckDuckGo search via the ddgs library.
 Credentials come from the environment (ANTHROPIC_API_KEY or an `ant auth login`
 profile) and are resolved by the SDK; this module never handles the key itself.
+Every Claude call's token usage and estimated cost is appended to
+data/costs/<date>.jsonl.
 """
 
+import datetime
 import json
 import sys
 import threading
@@ -21,10 +24,14 @@ from dashboard import DATA, one_line, parse_frontmatter, read_text, write_projec
 
 MODELS = ["claude-opus-5", "claude-sonnet-5"]
 DEFAULT_MODEL = "claude-opus-5"
+# The plan and the project summary are small structured-JSON steps, so they run on this cheaper model.
+ROUTER_MODEL = "claude-sonnet-5"
 # fallbacks="default" is documented for Opus 5; other models get no fallback rather than a guessed-at 400.
 FALLBACK_MODELS = {"claude-opus-5"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_HISTORY = 12
+# USD per million tokens (input, output) at list price, for the estimates in data/costs/.
+PRICES = {"claude-opus-5": (5.00, 25.00), "claude-sonnet-5": (2.00, 10.00)}
 
 AGENTS = {
     "dev": ("@dev", "Software Engineer"),
@@ -73,8 +80,17 @@ class HarnessError(Exception):
     pass
 
 
+class Refused(HarnessError):
+    pass
+
+
+class ModelUnavailable(HarnessError):
+    pass
+
+
 _client = None
 _client_lock = threading.Lock()
+_cost_lock = threading.Lock()
 
 
 def client() -> anthropic.Anthropic:
@@ -97,9 +113,9 @@ def _friendly(exc: Exception, model: str) -> HarnessError:
     if isinstance(exc, anthropic.AuthenticationError):
         msg = "Claude rejected the API key. Check ANTHROPIC_API_KEY in the terminal that starts the chat server, then restart it."
     elif isinstance(exc, anthropic.PermissionDeniedError):
-        msg = f"This API key isn't allowed to use {model}. Pick another model in the sidebar."
+        return ModelUnavailable(f"This API key isn't allowed to use {model}. Pick another model in the sidebar.")
     elif isinstance(exc, anthropic.NotFoundError):
-        msg = f"Claude doesn't recognize the model '{model}'."
+        return ModelUnavailable(f"Claude doesn't recognize the model '{model}'.")
     elif isinstance(exc, anthropic.RateLimitError):
         msg = "Claude is limiting how fast requests can be sent right now. Wait a minute and try again."
     elif isinstance(exc, anthropic.BadRequestError):
@@ -130,10 +146,35 @@ def _request(model: str, effort: str, max_tokens: int, schema: dict | None = Non
 
 
 def _refused() -> HarnessError:
-    return HarnessError("Claude declined to answer this one. Try rephrasing the request.")
+    return Refused("Claude declined to answer this one. Try rephrasing the request.")
 
 
-def chat_json(model: str, system: str, messages: list, schema: dict) -> dict:
+def log_usage(step: str, model: str, response) -> None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return
+    model = getattr(response, "model", None) or model
+    tokens = {key: getattr(usage, key, 0) or 0 for key in
+              ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")}
+    usd = None
+    if model in PRICES:
+        # input_tokens excludes cached tokens: cache writes bill at 1.25x input, cache reads at 0.1x.
+        per_in, per_out = PRICES[model]
+        usd = round((tokens["input_tokens"] * per_in + tokens["cache_creation_input_tokens"] * per_in * 1.25
+                     + tokens["cache_read_input_tokens"] * per_in * 0.1 + tokens["output_tokens"] * per_out) / 1e6, 6)
+    now = datetime.datetime.now()
+    record = {"time": now.isoformat(timespec="seconds"), "step": step, "model": model, **tokens, "usd": usd}
+    path = DATA / "costs" / f"{now:%Y-%m-%d}.jsonl"
+    try:
+        with _cost_lock:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+    except OSError as exc:  # the log is bookkeeping; losing a line mustn't cost the user their answer
+        print(f"Couldn't write the cost log: {exc}", file=sys.stderr)
+
+
+def chat_json(model: str, system: str, messages: list, schema: dict, step: str) -> dict:
     try:
         response = client().beta.messages.create(
             system=system, messages=messages, **_request(model, "low", 8000, schema))
@@ -141,6 +182,7 @@ def chat_json(model: str, system: str, messages: list, schema: dict) -> dict:
         if not _is_api_failure(exc):
             raise
         raise _friendly(exc, model) from exc
+    log_usage(step, model, response)
     if response.stop_reason == "refusal":
         raise _refused()
     text = next((b.text for b in response.content if b.type == "text"), "")
@@ -164,6 +206,7 @@ def chat_stream(model: str, system: str, messages: list):
         if not _is_api_failure(exc):
             raise
         raise _friendly(exc, model) from exc
+    log_usage("answer", model, final)
     if final.stop_reason == "refusal":
         raise _refused()
     if final.stop_reason not in ("end_turn", "stop_sequence"):
@@ -218,11 +261,21 @@ def pick_model(model) -> str:
     return model if model in MODELS else DEFAULT_MODEL
 
 
+def routed_json(model: str, system: str, messages: list, schema: dict, step: str) -> dict:
+    try:
+        return chat_json(ROUTER_MODEL, system, messages, schema, step)
+    except (Refused, ModelUnavailable):
+        if model == ROUTER_MODEL:
+            raise
+        # The router model has no server-side fallback (and a key may not allow it); the chosen model may.
+        return chat_json(model, system, messages, schema, step)
+
+
 def make_plan(model: str, history: list, message: str) -> dict:
     # Same history and project list the writer gets, so the plan and the answer are decided on the same facts.
     system = "\n\n".join(filter(None, [PLANNER_PROMPT, projects_line()]))
     messages = clean_history(history) + [{"role": "user", "content": message}]
-    data = chat_json(model, system, messages, PLAN_SCHEMA)
+    data = routed_json(model, system, messages, PLAN_SCHEMA, "plan")
 
     agent = data["agent"] if data.get("agent") in AGENTS else "writer"
     mode = "clarify" if data.get("mode") == "clarify" else "answer"
@@ -327,7 +380,7 @@ def save_project(model: str, history) -> dict:
         raise HarnessError("Chat a bit about your project first, then save it.")
     # The request must end on a user turn: ending on Claude's reply counts as an (unsupported) prefill.
     messages = history + [{"role": "user", "content": "Summarize this conversation as a project now."}]
-    data = chat_json(model, SAVE_PROMPT, messages, SAVE_SCHEMA)
+    data = routed_json(model, SAVE_PROMPT, messages, SAVE_SCHEMA, "save")
 
     path = write_project(data.get("name"), "planning", data.get("milestone"), "", data.get("description"),
                          data.get("data_source") or "not decided yet", projects_dir=DATA / "projects")

@@ -2,8 +2,9 @@
 
 Records every request the SDK sends and answers with canned JSON or SSE, so the
 chat engine can be exercised without credentials or network. Magic words in the
-last user message pick the reply: REFUSE (pre-output refusal), MIDREFUSE
-(refusal after some text), TRUNCATE (stream closes without finishing), BADKEY (401).
+last user message pick the reply: REFUSE (pre-output refusal), ROUTERREFUSE
+(pre-output refusal from claude-sonnet-5 only), MIDREFUSE (refusal after some
+text), TRUNCATE (stream closes without finishing), BADKEY (401).
 This only proves the code handles replies shaped the way this stub shapes them;
 whether the real API accepts the requests is only checked by a live run.
 """
@@ -48,7 +49,7 @@ class Stub:
                                                                          "message": "invalid x-api-key"}})
                 if body.get("stream"):
                     return self._stream(body, "MIDREFUSE" in last, "TRUNCATE" in last)
-                if "REFUSE" in last.split():
+                if "REFUSE" in last.split() or ("ROUTERREFUSE" in last and body["model"] == "claude-sonnet-5"):
                     return self._json(200, self._message(body, [], "refusal"))
                 props = body["output_config"]["format"]["schema"]["properties"]
                 payload = stub.summary if "data_source" in props else stub.plan

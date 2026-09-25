@@ -1,6 +1,7 @@
 # Ephemeral/personal memory - not shared
 data/daily-logs/
 data/inbox/
+data/costs/
 
 # Local-only Claude Code settings (permissions history, machine-specific)
 .claude/settings.local.json

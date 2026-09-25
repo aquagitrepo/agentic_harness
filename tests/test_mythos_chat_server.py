@@ -145,7 +145,7 @@ class HarnessFixesTest(unittest.TestCase):
         history = [{"role": r, "content": f"m{i}"} for i, r in enumerate(["user", "assistant"] * 6)]
         captured = {}
 
-        def fake(model, system, messages, schema):
+        def fake(model, system, messages, schema, step):
             captured.update(system=system, messages=messages)
             return {"agent": "writer", "mode": "answer", "steps": ["A"], "needs_search": False, "queries": []}
 

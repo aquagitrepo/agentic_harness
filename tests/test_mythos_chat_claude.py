@@ -3,6 +3,8 @@
 Run: python -m unittest discover -s tests -v
 """
 
+import io
+import json
 import os
 import sys
 import tempfile
@@ -63,22 +65,24 @@ class ClaudeLayerTest(unittest.TestCase):
 
     def test_planner_request_shape(self):
         self.events("find a paint defect dataset")
-        plan_req = self.stub.requests[0]
-        body = plan_req["body"]
-        self.assertEqual(body["model"], "claude-opus-5")
+        body = self.stub.requests[0]["body"]
+        self.assertEqual(body["model"], harness.ROUTER_MODEL)
         self.assertEqual(body["output_config"]["effort"], "low")
         self.assertEqual(body["output_config"]["format"]["type"], "json_schema")
-        self.assertEqual(body["fallbacks"], "default")
-        self.assertIn("server-side-fallback-2026-07-01", plan_req["headers"].get("anthropic-beta", ""))
+        self.assertNotIn("fallbacks", body)
         self.assertIsInstance(body["system"], str)
         self.assertEqual(body["messages"][-1]["role"], "user")
         self.assertNotIn("stream", body)
 
     def test_writer_request_shape(self):
         self.events("find a paint defect dataset")
-        body = self.stub.requests[1]["body"]
+        writer_req = self.stub.requests[1]
+        body = writer_req["body"]
         self.assertTrue(body["stream"])
+        self.assertEqual(body["model"], "claude-opus-5")
         self.assertEqual(body["output_config"], {"effort": "medium"})
+        self.assertEqual(body["fallbacks"], "default")
+        self.assertIn("server-side-fallback-2026-07-01", writer_req["headers"].get("anthropic-beta", ""))
         self.assertIn("## Quick answer\n## Details", body["system"])
         self.assertEqual(body["messages"][-1], {"role": "user", "content": "find a paint defect dataset"})
 
@@ -94,7 +98,7 @@ class ClaudeLayerTest(unittest.TestCase):
 
     def test_unknown_model_is_replaced_by_default(self):
         self.events("hello", model="claude-fable-5-1")
-        self.assertTrue(all(r["body"]["model"] == "claude-opus-5" for r in self.stub.requests))
+        self.assertEqual([r["body"]["model"] for r in self.stub.requests], [harness.ROUTER_MODEL, "claude-opus-5"])
 
     def test_sonnet_gets_no_fallback_params(self):
         self.events("hello", model="claude-sonnet-5")
@@ -106,6 +110,38 @@ class ClaudeLayerTest(unittest.TestCase):
     def test_planner_refusal_is_a_friendly_error(self):
         with self.assertRaisesRegex(harness.HarnessError, "declined"):
             self.events("REFUSE this")
+
+    def test_router_refusal_retries_the_plan_on_the_chosen_model(self):
+        events = self.events("ROUTERREFUSE please")
+        self.assertEqual([r["body"]["model"] for r in self.stub.requests],
+                         [harness.ROUTER_MODEL, "claude-opus-5", "claude-opus-5"])
+        self.assertEqual(self.stub.requests[1]["body"]["fallbacks"], "default")
+        self.assertEqual(events[-1]["type"], "done")
+
+    def test_router_refusal_is_final_when_the_router_was_chosen(self):
+        with self.assertRaisesRegex(harness.HarnessError, "declined"):
+            self.events("ROUTERREFUSE please", model=harness.ROUTER_MODEL)
+        self.assertEqual(len(self.stub.requests), 1)
+
+    def test_each_call_logs_usage_and_cost(self):
+        self.events("find a paint defect dataset")
+        harness.save_project("claude-opus-5", [{"role": "user", "content": "a paint checker"}])
+        rows = [json.loads(line) for path in sorted((harness.DATA / "costs").glob("*.jsonl"))
+                for line in path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([(r["step"], r["model"]) for r in rows],
+                         [("plan", "claude-sonnet-5"), ("answer", "claude-opus-5"), ("save", "claude-sonnet-5")])
+        plan, answer = rows[0], rows[1]
+        self.assertEqual((plan["input_tokens"], plan["output_tokens"]), (10, 5))
+        self.assertAlmostEqual(plan["usd"], (10 * 2.00 + 5 * 10.00) / 1e6)
+        self.assertEqual(answer["output_tokens"], 12)  # the stream's final usage, not message_start's
+        self.assertAlmostEqual(answer["usd"], (10 * 5.00 + 12 * 25.00) / 1e6)
+
+    def test_cost_log_failure_does_not_break_the_turn(self):
+        (harness.DATA / "costs").write_text("a file where the folder should be", encoding="utf-8")
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            events = self.events("find a paint defect dataset")
+        self.assertEqual(events[-1]["type"], "done")
+        self.assertIn("cost log", err.getvalue())
 
     def test_mid_stream_refusal_raises_after_partial_text(self):
         gen = harness.run_turn("claude-opus-5", [], "MIDREFUSE please")

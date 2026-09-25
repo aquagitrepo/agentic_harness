@@ -12,7 +12,7 @@ A reusable agentic-OS harness for Claude Code, built on the ECC skill library. I
 | `data/` | File-based persistent memory — see `data/README.md` |
 | `scripts/dashboard.py` | Local dashboard over `data/` (port 8787) |
 | `chat/` | Beginner-friendly chat harness on the Claude API (port 8788) |
-| `tests/` | Retained regression tests: `python -m unittest discover -s tests` |
+| `tests/` | Retained regression tests, run with the `.venv` Python (see Onboarding) |
 | `projects/` | Code for projects tracked in `data/projects/` |
 | `.claude/skill-library/` | 296-skill ECC library, indexed by the `ecc-router` skill |
 | `ECC_SKILLS_LIBRARY.md` / `ECC_Skills_Catalog.pdf` | Full ECC catalog reference |
@@ -46,9 +46,8 @@ Both local servers only accept requests from their own page on this machine. Oth
 You need your own Claude API key from https://console.anthropic.com. Put it in an environment variable in your own terminal. Never paste it into the chat or commit it to a file.
 
 ```powershell
-pip install -r chat/requirements.txt
 $env:ANTHROPIC_API_KEY = "<your key>"   # this terminal only; use setx to keep it permanently
-python chat/server.py
+.venv\Scripts\python chat/server.py
 # then open http://127.0.0.1:8788
 ```
 
@@ -57,7 +56,13 @@ No scheduled/unattended automation is configured — everything here runs intera
 ## Onboarding (for anyone else using this repo)
 
 1. **Clone it, then open a Claude Code session with this folder as the working directory.** `CLAUDE.md` loads automatically — nothing else to configure to start.
-2. **Prerequisites**: git and Python 3.10+. The dashboard uses only the standard library. The chat also needs `pip install -r chat/requirements.txt` and your own Claude API key.
+2. **Prerequisites**: git and Python 3.10+. The dashboard uses only the standard library. The chat needs the packages in `chat/requirements.txt` and your own Claude API key. Install the packages once into a `.venv` in the repo root. The preview configs in `.claude/launch.json` and the tests both use it:
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\python -m pip install -r chat/requirements.txt
+   .venv\Scripts\python -m unittest discover -s tests
+   ```
+   On macOS/Linux the interpreter is `.venv/bin/python`; change `runtimeExecutable` in `.claude/launch.json` to match.
 3. **Set your own git identity** in your clone before committing — don't assume the committer's identity carries over:
    ```bash
    git config user.name "Your Name"

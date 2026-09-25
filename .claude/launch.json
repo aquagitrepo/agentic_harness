@@ -3,13 +3,13 @@
   "configurations": [
     {
       "name": "harness-dashboard",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["scripts/dashboard.py"],
       "port": 8787
     },
     {
       "name": "harness-chat",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["chat/server.py"],
       "port": 8788
     }

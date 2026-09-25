@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness Chat</title>
+<link rel="stylesheet" href="/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="logo"><i></i><i></i><i></i></span>Harness Chat</div>
+
+    <label class="field">Model
+      <select id="model"></select>
+    </label>
+
+    <div class="side-title">Agents</div>
+    <ul id="agents" class="agents">
+      <li data-agent="dev"><b>@dev</b><span>builds and fixes code</span></li>
+      <li data-agent="writer"><b>@writer</b><span>explains and documents</span></li>
+      <li data-agent="researcher"><b>@researcher</b><span>searches and compares</span></li>
+      <li data-agent="ops"><b>@ops</b><span>setup and deployment</span></li>
+    </ul>
+
+    <div class="side-title">Projects</div>
+    <ul id="projects" class="projects"></ul>
+    <button id="save-project" class="ghost" type="button" disabled>Save this chat as a project</button>
+  </aside>
+
+  <main class="main">
+    <div id="thread" class="thread">
+      <section id="welcome" class="welcome">
+        <h1>What do you want to make?</h1>
+        <p>Tell me in your own words. I'll pick the right agent, send out search agents when we need facts from the web, and build the answer block by block while you watch.</p>
+        <div class="chips">
+          <button type="button" class="chip">I want to start a new project</button>
+          <button type="button" class="chip">What is an AI agent, in simple words?</button>
+          <button type="button" class="chip">Find a public dataset of paint surface defects</button>
+          <button type="button" class="chip">How does this harness work?</button>
+        </div>
+      </section>
+    </div>
+
+    <form id="composer" class="composer">
+      <textarea id="input" rows="1" placeholder="Ask anything, or describe what you want to build..."></textarea>
+      <button id="send" type="submit">Send</button>
+    </form>
+  </main>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

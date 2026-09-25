@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["scripts/dashboard.py"],
       "port": 8787
+    },
+    {
+      "name": "harness-chat",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["chat/server.py"],
+      "port": 8788
     }
   ]
 }

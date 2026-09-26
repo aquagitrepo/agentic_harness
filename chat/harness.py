@@ -21,6 +21,7 @@ from ddgs import DDGS
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 from dashboard import DATA, one_line, parse_frontmatter, read_text, write_project  # noqa: E402
+from errors import HarnessError  # noqa: E402
 
 MODELS = ["claude-opus-5", "claude-sonnet-5"]
 DEFAULT_MODEL = "claude-opus-5"
@@ -74,10 +75,6 @@ SAVE_SCHEMA = {
     "required": ["name", "description", "milestone", "data_source"],
     "additionalProperties": False,
 }
-
-
-class HarnessError(Exception):
-    pass
 
 
 class Refused(HarnessError):
